@@ -23,6 +23,10 @@ export class DrawingCanvasComponent implements AfterViewInit {
   main: ElementRef | undefined;
   @ViewChild('inputName', { static: true })
   inputName: ElementRef | undefined;
+  @ViewChild('buttonSave', { static: true })
+  buttonSave: ElementRef | undefined;
+  @ViewChild('saver', { static: true })
+  saver: ElementRef | undefined;
   strokeStyle: string = 'red';
   lineWidth: number = 4;
   image = new Image();
@@ -92,10 +96,18 @@ export class DrawingCanvasComponent implements AfterViewInit {
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
       buttonEl.classList.replace('btn-success', 'btn-primary');
     }
+
+    const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
+    inputNameEl.classList.remove('is-invalid');
     this.fileName = event.target.value;
     //console.log(this.fileName);
   }
   onUpload() {
+    if (this.fileName === '') {
+      const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
+      inputNameEl.classList.add('is-invalid');
+      return;
+    }
     const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
     const buttonEl: HTMLButtonElement = this.button?.nativeElement;
     let file: File;
@@ -105,11 +117,13 @@ export class DrawingCanvasComponent implements AfterViewInit {
       //console.log(file);
       var res = this.fileUploadService.upload(file, this.destURL).subscribe(
         (x) => {
+          console.log(x);
           buttonEl.classList.replace('btn-primary', 'btn-success');
           this.uploaded = true;
           //console.log(event);
         },
         (err: HttpErrorResponse) => {
+          console.log(err);
           buttonEl.classList.replace('btn-primary', 'btn-danger');
           this.uploaded = true;
         }
@@ -117,8 +131,28 @@ export class DrawingCanvasComponent implements AfterViewInit {
       //console.log(res);
     });
   }
+  onSave() {
+    if (this.fileName === '') {
+      const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
+      inputNameEl.classList.add('is-invalid');
+      return;
+    }
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    const buttonSaveEl: HTMLButtonElement = this.buttonSave?.nativeElement;
+    const saverEl: HTMLAnchorElement = this.saver?.nativeElement;
+    let file: File;
+    canvasEl.toBlob((blob) => {
+      if (blob) file = new File([blob], this.fileName);
+      else throw 'No image';
+      //console.log(file);
+      saverEl.href = URL.createObjectURL(file);
+      saverEl.download = this.fileName;
+      saverEl.click();
+      //console.log(res);
+    });
+  }
   onChangeLineThickness(lineThicknessInput: any) {
-    console.log(lineThicknessInput.value);
+    //console.log(lineThicknessInput.value);
     this.lineWidth = lineThicknessInput.value;
   }
   onUploadClasses() {
