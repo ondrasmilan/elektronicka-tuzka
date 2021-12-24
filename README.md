@@ -8,7 +8,7 @@ Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app w
 
 ## Example
 
-![alt text](https://github.com/[ondrasmilan]/[elektronicka-tuzka]/example.png?raw=true)
+![example](./example.png)
 
 ### Controls
 
