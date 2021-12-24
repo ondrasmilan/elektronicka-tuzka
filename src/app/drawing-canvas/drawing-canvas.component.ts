@@ -1,6 +1,5 @@
 import { AfterViewInit, Component, ElementRef, ViewChild } from '@angular/core';
 import { FileUploadService } from '../file-upload.service';
-import { FormBuilder } from '@angular/forms';
 import { ColorPickerService, Cmyk, Rgba } from 'ngx-color-picker';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -27,34 +26,55 @@ export class DrawingCanvasComponent implements AfterViewInit {
   buttonSave: ElementRef | undefined;
   @ViewChild('saver', { static: true })
   saver: ElementRef | undefined;
-  strokeStyle: string = 'red';
-  lineWidth: number = 4;
-  image = new Image();
-  imageLoaded: boolean = false;
-  file: File = new File([], '');
-  destURL: string = '';
-  fileName: string = '';
-  loadFileForm = this.formBuilder.group({
-    file: File,
-  });
-  uploaded: boolean = false;
-  outerEl: HTMLElement | null | undefined = null;
-  public color: string = '#ff0000';
-  public colorValue: string = '#000000';
-
+  private lineWidth: number = 4;
+  private image = new Image();
+  private imageLoaded: boolean = false;
+  private file: File = new File([], '');
+  private destURL: string = '';
+  private fileName: string = '';
+  private uploaded: boolean = false;
+  private outerEl: HTMLElement | null | undefined = null;
   private cx!: CanvasRenderingContext2D | null | undefined;
-
   private paint: boolean = false;
-
   private clickX: number[] = [];
   private clickY: number[] = [];
   private clickDrag: boolean[] = [];
+  public color: string = '#ff0000';
+  public colorValue: string = '#000000';
+
   constructor(
     private fileUploadService: FileUploadService,
-    private formBuilder: FormBuilder,
     private cpService: ColorPickerService
   ) {}
-  hexToRgb(hex: string): Array<number> {
+
+  ngAfterViewInit() {
+    // get the context
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    this.cx = canvasEl.getContext('2d');
+
+    this.resizeComponent();
+    if (!this.cx) throw 'Cannot get context';
+    // set some default properties about the line
+    this.cx.lineWidth = 4;
+    this.cx.lineCap = 'round';
+    this.cx.strokeStyle = 'red';
+
+    this.resizeComponent();
+
+    this.outerEl = this.main?.nativeElement.parentElement?.parentElement;
+
+    this.redraw();
+    this.createUserEvents();
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width;
+      this.resizeComponent();
+    });
+    if (this.outerEl) {
+      observer.observe(this.outerEl);
+    }
+  }
+
+  private hexToRgb(hex: string): Array<number> {
     let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     if (result) {
       let r = parseInt(result[1], 16);
@@ -64,6 +84,7 @@ export class DrawingCanvasComponent implements AfterViewInit {
     }
     return [];
   }
+
   public onEventLog(event: string, data: any): void {
     if (
       event === 'cpSliderDragEnd' ||
@@ -83,7 +104,7 @@ export class DrawingCanvasComponent implements AfterViewInit {
     this.color = color;
   }
 
-  onChangeUrl(event: any) {
+  public onChangeUrl(event: any) {
     if (this.uploaded) {
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
       buttonEl.classList.replace('btn-success', 'btn-primary');
@@ -91,7 +112,8 @@ export class DrawingCanvasComponent implements AfterViewInit {
     this.destURL = event.target.value;
     //console.log(this.destURL);
   }
-  onChangeName(event: any) {
+
+  public onChangeName(event: any) {
     if (this.uploaded) {
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
       buttonEl.classList.replace('btn-success', 'btn-primary');
@@ -102,7 +124,8 @@ export class DrawingCanvasComponent implements AfterViewInit {
     this.fileName = event.target.value;
     //console.log(this.fileName);
   }
-  onUpload() {
+
+  public onUpload() {
     if (this.fileName === '') {
       const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
       inputNameEl.classList.add('is-invalid');
@@ -131,7 +154,8 @@ export class DrawingCanvasComponent implements AfterViewInit {
       //console.log(res);
     });
   }
-  onSave() {
+
+  public onSave() {
     if (this.fileName === '') {
       const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
       inputNameEl.classList.add('is-invalid');
@@ -151,11 +175,13 @@ export class DrawingCanvasComponent implements AfterViewInit {
       //console.log(res);
     });
   }
-  onChangeLineThickness(lineThicknessInput: any) {
+
+  public onChangeLineThickness(lineThicknessInput: any) {
     //console.log(lineThicknessInput.value);
     this.lineWidth = lineThicknessInput.value;
   }
-  onUploadClasses() {
+
+  public onUploadClasses() {
     if (this.uploaded) {
       this.uploaded = false;
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
@@ -163,7 +189,8 @@ export class DrawingCanvasComponent implements AfterViewInit {
       buttonEl.classList.replace('btn-danger', 'btn-primary');
     }
   }
-  onLoad(imageInput: any) {
+
+  public onLoad(imageInput: any) {
     this.onUploadClasses();
     const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
     this.imageLoaded = false;
@@ -201,34 +228,8 @@ export class DrawingCanvasComponent implements AfterViewInit {
       //canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
     };
   }
-  ngAfterViewInit() {
-    // get the context
-    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
-    this.cx = canvasEl.getContext('2d');
 
-    this.resizeComponent();
-    if (!this.cx) throw 'Cannot get context';
-    // set some default properties about the line
-    this.cx.lineWidth = 4;
-    this.cx.lineCap = 'round';
-    this.cx.strokeStyle = 'red';
-
-    this.resizeComponent();
-
-    this.outerEl = this.main?.nativeElement.parentElement?.parentElement;
-
-    this.redraw();
-    this.createUserEvents();
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0].contentRect.width;
-      this.resizeComponent();
-    });
-    if (this.outerEl) {
-      observer.observe(this.outerEl);
-    }
-  }
-
-  resizeComponent(event?: Event) {
+  private resizeComponent(event?: Event) {
     const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
     const bottomEl: HTMLButtonElement = this.bottom?.nativeElement;
     const canvasDivEl: HTMLButtonElement = this.canvasDiv?.nativeElement;
@@ -252,6 +253,7 @@ export class DrawingCanvasComponent implements AfterViewInit {
       }
     }
   }
+
   private createUserEvents() {
     const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
 
@@ -291,11 +293,13 @@ export class DrawingCanvasComponent implements AfterViewInit {
     }
     context.closePath();
   }
+
   private addClick(x: number, y: number, dragging: boolean) {
     this.clickX.push(x);
     this.clickY.push(y);
     this.clickDrag.push(dragging);
   }
+
   private clearCanvas() {
     const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
     this.cx = canvasEl.getContext('2d');
