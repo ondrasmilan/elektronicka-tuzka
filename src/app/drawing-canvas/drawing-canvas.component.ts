@@ -26,8 +26,6 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   button: ElementRef | undefined;
   @ViewChild('main', { static: true })
   main: ElementRef | undefined;
-  @ViewChild('h1', { static: true })
-  h1: ElementRef | undefined;
   @ViewChild('inputName', { static: true })
   inputName: ElementRef | undefined;
   strokeStyle: string = 'red';
@@ -39,16 +37,33 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   loadFileForm = this.formBuilder.group({
     file: File,
   });
-  outerEl: HTMLElement | null | undefined = null;
   uploaded: boolean = false;
 
-  private cx!: CanvasRenderingContext2D | null | undefined;
-  drawingSubscription!: Subscription;
+  outerEl: HTMLElement | null | undefined = null;
+  canvasEl: HTMLCanvasElement = new HTMLCanvasElement();
+  buttonEl: HTMLButtonElement = new HTMLButtonElement();
+  bottomEl: HTMLElement = new HTMLElement();
+  context: CanvasRenderingContext2D | null = new CanvasRenderingContext2D();
 
+  private cx!: CanvasRenderingContext2D | null | undefined;
+  drawingSubscriptionMouse!: Subscription;
+  drawingSubscriptionTouch!: Subscription;
+
+  private paint: boolean = false;
+
+  private clickX: number[] = [];
+  private clickY: number[] = [];
+  private clickDrag: boolean[] = [];
   constructor(
     private fileUploadService: FileUploadService,
     private formBuilder: FormBuilder
-  ) {}
+  ) {
+    this.canvasEl = this.canvas?.nativeElement;
+    this.buttonEl = this.button?.nativeElement;
+    this.bottomEl = this.bottom?.nativeElement;
+    this.outerEl = this.main?.nativeElement.parentElement?.parentElement;
+    this.context = this.canvasEl.getContext('2d');
+  }
   onChangeUrl(event: any) {
     if (this.uploaded) {
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
@@ -66,17 +81,15 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
     //console.log(this.fileName);
   }
   onUpload() {
-    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
-    const buttonEl: HTMLButtonElement = this.button?.nativeElement;
     let file: File;
-    canvasEl.toBlob((blob) => {
+    this.canvasEl.toBlob((blob) => {
       if (blob) file = new File([blob], this.fileName);
       else throw 'No image';
       //console.log(file);
       var res = this.fileUploadService
         .upload(file, this.destURL)
         .subscribe((event: any) => {
-          buttonEl.classList.replace('btn-primary', 'btn-success');
+          this.buttonEl.classList.replace('btn-primary', 'btn-success');
           //console.log(event);
         });
       //console.log(res);
@@ -84,13 +97,11 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   }
   onLoad(imageInput: any) {
     if (this.uploaded) {
-      const buttonEl: HTMLButtonElement = this.button?.nativeElement;
-      buttonEl.classList.replace('btn-success', 'btn-primary');
+      this.buttonEl.classList.replace('btn-success', 'btn-primary');
     }
     const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
     this.imageLoaded = false;
     this.resizeComponent();
-    const bottomEl: HTMLElement = this.bottom?.nativeElement;
     this.file = imageInput.files[0];
     inputNameEl.value = this.file.name;
     this.fileName = this.file.name;
@@ -104,8 +115,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
       },
       false
     );
-    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
-    this.cx = canvasEl.getContext('2d');
+    this.cx = this.canvasEl.getContext('2d');
     if (this.file) {
       //console.log(this.file);
       reader.readAsDataURL(this.file);
@@ -113,31 +123,35 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
     this.image.onload = () => {
       console.log('image has loaded!');
 
-      canvasEl.classList.remove('beforeImg');
+      this.canvasEl.classList.remove('beforeImg');
       this.imageLoaded = true;
 
-      canvasEl.width = this.image.width;
-      canvasEl.height = this.image.height;
-      this.cx!.drawImage(this.image, 0, 0, canvasEl.width, canvasEl.height);
-      canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
+      this.canvasEl.width = this.image.width;
+      this.canvasEl.height = this.image.height;
+      this.context!.drawImage(
+        this.image,
+        0,
+        0,
+        this.canvasEl.width,
+        this.canvasEl.height
+      );
+      this.canvasEl.style.marginBottom =
+        this.bottomEl.offsetHeight.toString() + 'px';
     };
   }
   ngAfterViewInit() {
     // get the context
-    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
-    this.cx = canvasEl.getContext('2d');
 
     this.resizeComponent();
-    if (!this.cx) throw 'Cannot get context';
+    if (!this.context) throw 'Cannot get context';
     // set some default properties about the line
-    this.cx.lineWidth = 4;
-    this.cx.lineCap = 'round';
-    this.cx.strokeStyle = this.strokeStyle;
+    this.context.lineWidth = 4;
+    this.context.lineCap = 'round';
+    this.context.strokeStyle = this.strokeStyle;
 
     this.resizeComponent();
 
-    this.outerEl = this.main?.nativeElement.parentElement?.parentElement;
-    this.captureEvents(canvasEl);
+    this.captureEvents(this.canvasEl);
     const observer = new ResizeObserver((entries) => {
       const width = entries[0].contentRect.width;
       this.resizeComponent();
@@ -148,23 +162,20 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   resizeComponent(event?: Event) {
-    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
-    const bottomEl: HTMLButtonElement = this.bottom?.nativeElement;
-    const outerEl: HTMLElement | null | undefined =
-      this.main?.nativeElement.parentElement?.parentElement;
     if (!this.imageLoaded) {
-      if (outerEl) {
-        canvasEl.height = outerEl.offsetHeight - (bottomEl.offsetHeight + 10);
-        canvasEl.width = outerEl.offsetWidth;
+      if (this.outerEl) {
+        this.canvasEl.height =
+          this.outerEl.offsetHeight - (this.bottomEl.offsetHeight + 10);
+        this.canvasEl.width = this.outerEl.offsetWidth;
       }
-      this.cx = canvasEl.getContext('2d');
     } else {
-      canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
+      this.canvasEl.style.marginBottom =
+        this.bottomEl.offsetHeight.toString() + 'px';
     }
   }
   captureEvents(canvasEl: HTMLCanvasElement) {
     // this will capture all mousedown events from teh canvas element
-    this.drawingSubscription = fromEvent(canvasEl, 'mousedown')
+    this.drawingSubscriptionMouse = fromEvent(canvasEl, 'mousedown')
       .pipe(
         switchMap((e) => {
           // after a mouse down, we'll record all mouse moves
@@ -206,8 +217,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
     currentPos: { x: number; y: number }
   ) {
     if (this.uploaded) {
-      const buttonEl: HTMLButtonElement = this.button?.nativeElement;
-      buttonEl.classList.replace('btn-success', 'btn-primary');
+      this.buttonEl.classList.replace('btn-success', 'btn-primary');
     }
     // incase the context is not set
     if (!this.cx) {
@@ -233,6 +243,6 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     // this will remove event lister when this component is destroyed
-    this.drawingSubscription.unsubscribe();
+    this.drawingSubscriptionMouse.unsubscribe();
   }
 }
