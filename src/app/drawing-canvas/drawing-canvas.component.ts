@@ -1,14 +1,7 @@
-import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  OnDestroy,
-  ViewChild,
-} from '@angular/core';
-import { fromEvent, Subscription } from 'rxjs';
-import { pairwise, switchMap, takeUntil } from 'rxjs/operators';
+import { AfterViewInit, Component, ElementRef, ViewChild } from '@angular/core';
 import { FileUploadService } from '../file-upload.service';
 import { FormBuilder } from '@angular/forms';
+import { ColorPickerService, Cmyk, Rgba } from 'ngx-color-picker';
 import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
@@ -16,12 +9,14 @@ import { HttpErrorResponse } from '@angular/common/http';
   templateUrl: './drawing-canvas.component.html',
   styleUrls: ['./drawing-canvas.component.scss'],
 })
-export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
+export class DrawingCanvasComponent implements AfterViewInit {
   title = 'Elektronická tužka';
   @ViewChild('canvas', { static: true })
   canvas: ElementRef | undefined;
   @ViewChild('bottom', { static: true })
   bottom: ElementRef | undefined;
+  @ViewChild('canvasDiv', { static: true })
+  canvasDiv: ElementRef | undefined;
   @ViewChild('button', { static: true })
   button: ElementRef | undefined;
   @ViewChild('main', { static: true })
@@ -29,6 +24,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   @ViewChild('inputName', { static: true })
   inputName: ElementRef | undefined;
   strokeStyle: string = 'red';
+  lineWidth: number = 4;
   image = new Image();
   imageLoaded: boolean = false;
   file: File = new File([], '');
@@ -38,17 +34,51 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
     file: File,
   });
   uploaded: boolean = false;
-
   outerEl: HTMLElement | null | undefined = null;
+  public color: string = '#ff0000';
+  public colorValue: string = '#000000';
 
   private cx!: CanvasRenderingContext2D | null | undefined;
-  drawingSubscriptionMouse!: Subscription;
-  drawingSubscriptionTouch!: Subscription;
 
+  private paint: boolean = false;
+
+  private clickX: number[] = [];
+  private clickY: number[] = [];
+  private clickDrag: boolean[] = [];
   constructor(
     private fileUploadService: FileUploadService,
-    private formBuilder: FormBuilder
+    private formBuilder: FormBuilder,
+    private cpService: ColorPickerService
   ) {}
+  hexToRgb(hex: string): Array<number> {
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (result) {
+      let r = parseInt(result[1], 16);
+      let g = parseInt(result[2], 16);
+      let b = parseInt(result[3], 16);
+      return [r, g, b]; //return 23,14,45 -> reformat if needed
+    }
+    return [];
+  }
+  public onEventLog(event: string, data: any): void {
+    if (
+      event === 'cpSliderDragEnd' ||
+      event === 'cpInputChange' ||
+      event === 'cpSliderDragStart'
+    ) {
+      this.color = data.color;
+      let rgb = this.hexToRgb(data.color);
+      let gw = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+      if (gw > 90) this.colorValue = '#000000';
+      else this.colorValue = '#ffffff';
+    }
+    console.log(event, data);
+  }
+
+  public onChangeColor(color: string): void {
+    this.color = color;
+  }
+
   onChangeUrl(event: any) {
     if (this.uploaded) {
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
@@ -73,20 +103,34 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
       if (blob) file = new File([blob], this.fileName);
       else throw 'No image';
       //console.log(file);
-      var res = this.fileUploadService
-        .upload(file, this.destURL)
-        .subscribe((event: any) => {
+      var res = this.fileUploadService.upload(file, this.destURL).subscribe(
+        (x) => {
           buttonEl.classList.replace('btn-primary', 'btn-success');
+          this.uploaded = true;
           //console.log(event);
-        });
+        },
+        (err: HttpErrorResponse) => {
+          buttonEl.classList.replace('btn-primary', 'btn-danger');
+          this.uploaded = true;
+        }
+      );
       //console.log(res);
     });
   }
-  onLoad(imageInput: any) {
+  onChangeLineThickness(lineThicknessInput: any) {
+    console.log(lineThicknessInput.value);
+    this.lineWidth = lineThicknessInput.value;
+  }
+  onUploadClasses() {
     if (this.uploaded) {
+      this.uploaded = false;
       const buttonEl: HTMLButtonElement = this.button?.nativeElement;
       buttonEl.classList.replace('btn-success', 'btn-primary');
+      buttonEl.classList.replace('btn-danger', 'btn-primary');
     }
+  }
+  onLoad(imageInput: any) {
+    this.onUploadClasses();
     const inputNameEl: HTMLInputElement = this.inputName?.nativeElement;
     this.imageLoaded = false;
     this.resizeComponent();
@@ -111,6 +155,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
       reader.readAsDataURL(this.file);
     }
     this.image.onload = () => {
+      this.clearCanvas();
       console.log('image has loaded!');
 
       canvasEl.classList.remove('beforeImg');
@@ -119,7 +164,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
       canvasEl.width = this.image.width;
       canvasEl.height = this.image.height;
       this.cx!.drawImage(this.image, 0, 0, canvasEl.width, canvasEl.height);
-      canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
+      //canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
     };
   }
   ngAfterViewInit() {
@@ -132,12 +177,14 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
     // set some default properties about the line
     this.cx.lineWidth = 4;
     this.cx.lineCap = 'round';
-    this.cx.strokeStyle = this.strokeStyle;
+    this.cx.strokeStyle = 'red';
 
     this.resizeComponent();
 
     this.outerEl = this.main?.nativeElement.parentElement?.parentElement;
-    this.captureEvents(canvasEl);
+
+    this.redraw();
+    this.createUserEvents();
     const observer = new ResizeObserver((entries) => {
       const width = entries[0].contentRect.width;
       this.resizeComponent();
@@ -150,6 +197,7 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
   resizeComponent(event?: Event) {
     const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
     const bottomEl: HTMLButtonElement = this.bottom?.nativeElement;
+    const canvasDivEl: HTMLButtonElement = this.canvasDiv?.nativeElement;
     const outerEl: HTMLElement | null | undefined =
       this.main?.nativeElement.parentElement?.parentElement;
     if (!this.imageLoaded) {
@@ -158,81 +206,112 @@ export class DrawingCanvasComponent implements AfterViewInit, OnDestroy {
         canvasEl.width = outerEl.offsetWidth;
       }
       this.cx = canvasEl.getContext('2d');
+      this.clearCanvas();
     } else {
       canvasEl.style.marginBottom = bottomEl.offsetHeight.toString() + 'px';
+      if (outerEl) {
+        canvasEl.style.marginTop =
+          (~~(
+            (outerEl.offsetHeight - bottomEl.offsetHeight - canvasEl.height) /
+            2
+          )).toString() + 'px';
+      }
     }
   }
-  captureEvents(canvasEl: HTMLCanvasElement) {
-    // this will capture all mousedown events from teh canvas element
-    this.drawingSubscriptionMouse = fromEvent(canvasEl, 'mousedown')
-      .pipe(
-        switchMap((e) => {
-          // after a mouse down, we'll record all mouse moves
-          return fromEvent(canvasEl, 'mousemove').pipe(
-            // we'll stop (and unsubscribe) once the user releases the mouse
-            // this will trigger a 'mouseup' event
-            takeUntil(fromEvent(canvasEl, 'mouseup')),
-            // we'll also stop (and unsubscribe) once the mouse leaves the canvas (mouseleave event)
-            takeUntil(fromEvent(canvasEl, 'mouseleave')),
-            // pairwise lets us get the previous value to draw a line from
-            // the previous point to the current point
-            pairwise()
-          );
-        })
-      )
-      .subscribe((res) => {
-        const rect = canvasEl.getBoundingClientRect();
+  private createUserEvents() {
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
 
-        const prevMouseEvent = res[0] as MouseEvent;
-        const currMouseEvent = res[1] as MouseEvent;
+    canvasEl.addEventListener('mousedown', this.pressEventHandler);
+    canvasEl.addEventListener('mousemove', this.dragEventHandler);
+    canvasEl.addEventListener('mouseup', this.releaseEventHandler);
+    canvasEl.addEventListener('mouseout', this.cancelEventHandler);
 
-        // previous and current position with the offset
-        const prevPos = {
-          x: prevMouseEvent.clientX - rect.left,
-          y: prevMouseEvent.clientY - rect.top,
-        };
-
-        const currentPos = {
-          x: currMouseEvent.clientX - rect.left,
-          y: currMouseEvent.clientY - rect.top,
-        };
-
-        // this method we'll implement soon to do the actual drawing
-        this.drawOnCanvas(prevPos, currentPos);
-      });
-  }
-  drawOnCanvas(
-    prevPos: { x: number; y: number },
-    currentPos: { x: number; y: number }
-  ) {
-    if (this.uploaded) {
-      const buttonEl: HTMLButtonElement = this.button?.nativeElement;
-      buttonEl.classList.replace('btn-success', 'btn-primary');
-    }
-    // incase the context is not set
-    if (!this.cx) {
-      return;
-    }
-
-    // start our drawing path
-    this.cx.beginPath();
-
-    this.cx.strokeStyle = this.strokeStyle;
-    this.cx.lineWidth = 5;
-    // we're drawing lines so we need a previous position
-    if (prevPos) {
-      // sets the start point
-      this.cx.moveTo(prevPos.x, prevPos.y); // from
-      // draws a line from the start pos until the current position
-      this.cx.lineTo(currentPos.x, currentPos.y);
-
-      // strokes the current path with the styles we set earlier
-      this.cx.stroke();
-    }
+    canvasEl.addEventListener('touchstart', this.pressEventHandler);
+    canvasEl.addEventListener('touchmove', this.dragEventHandler);
+    canvasEl.addEventListener('touchend', this.releaseEventHandler);
+    canvasEl.addEventListener('touchcancel', this.cancelEventHandler);
   }
 
-  ngOnDestroy() {
-    // this will remove event lister when this component is destroyed
-    this.drawingSubscriptionMouse.unsubscribe();
+  private redraw() {
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    this.cx = canvasEl.getContext('2d');
+    if (!this.cx) throw 'no context';
+    this.cx.lineWidth = this.lineWidth;
+    this.cx.strokeStyle = this.color;
+    let clickX = this.clickX;
+    let context = this.cx;
+    let clickDrag = this.clickDrag;
+    let clickY = this.clickY;
+    this.onUploadClasses();
+    if (!context) throw 'No context';
+    for (let i = 0; i < clickX.length; ++i) {
+      context.beginPath();
+      if (clickDrag[i] && i) {
+        context.moveTo(clickX[i - 1], clickY[i - 1]);
+      } else {
+        context.moveTo(clickX[i] - 1, clickY[i]);
+      }
+
+      context.lineTo(clickX[i], clickY[i]);
+      context.stroke();
+    }
+    context.closePath();
   }
+  private addClick(x: number, y: number, dragging: boolean) {
+    this.clickX.push(x);
+    this.clickY.push(y);
+    this.clickDrag.push(dragging);
+  }
+  private clearCanvas() {
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    this.cx = canvasEl.getContext('2d');
+    if (!this.cx) throw 'no context';
+    this.cx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    this.clickX = [];
+    this.clickY = [];
+    this.clickDrag = [];
+  }
+
+  private releaseEventHandler = () => {
+    this.paint = false;
+    this.redraw();
+  };
+
+  private cancelEventHandler = () => {
+    this.paint = false;
+  };
+  private pressEventHandler = (e: MouseEvent | TouchEvent) => {
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    let mouseX = (e as TouchEvent).changedTouches
+      ? (e as TouchEvent).changedTouches[0].pageX
+      : (e as MouseEvent).pageX;
+    let mouseY = (e as TouchEvent).changedTouches
+      ? (e as TouchEvent).changedTouches[0].pageY
+      : (e as MouseEvent).pageY;
+    mouseX -= canvasEl.offsetLeft;
+    mouseY -= canvasEl.offsetTop;
+
+    this.paint = true;
+    this.addClick(mouseX, mouseY, false);
+    this.redraw();
+  };
+
+  private dragEventHandler = (e: MouseEvent | TouchEvent) => {
+    const canvasEl: HTMLCanvasElement = this.canvas?.nativeElement;
+    let mouseX = (e as TouchEvent).changedTouches
+      ? (e as TouchEvent).changedTouches[0].pageX
+      : (e as MouseEvent).pageX;
+    let mouseY = (e as TouchEvent).changedTouches
+      ? (e as TouchEvent).changedTouches[0].pageY
+      : (e as MouseEvent).pageY;
+    mouseX -= canvasEl.offsetLeft;
+    mouseY -= canvasEl.offsetTop;
+
+    if (this.paint) {
+      this.addClick(mouseX, mouseY, true);
+      this.redraw();
+    }
+
+    e.preventDefault();
+  };
 }

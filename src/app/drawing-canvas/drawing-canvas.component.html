@@ -1,11 +1,35 @@
 <div #main class="main">
-  <div style="text-align: center">
+  <div #canvasDiv style="text-align: center">
     <canvas #canvas class="beforeImg"></canvas>
   </div>
-
-  <div #bottom class="container fixed-bottom">
-    <div class="row">
-      <div class="col-md-5">
+  <div #bottom class="fixed-bottom">
+    <div class="row no-gutters">
+      <div class="col-md-1 col-6">
+        <input
+          [value]="color"
+          [style.background]="color"
+          [cpAlphaChannel]="'disabled'"
+          [(colorPicker)]="color"
+          (colorPickerOpen)="onEventLog('colorPickerOpen', $event)"
+          (colorPickerClose)="onEventLog('colorPickerClose', $event)"
+          (cpInputChange)="onEventLog('cpInputChange', $event)"
+          (cpSliderDragStart)="onEventLog('cpSliderDragStart', $event)"
+          (cpSliderDragEnd)="onEventLog('cpSliderDragEnd', $event)"
+          class="form-control"
+          [style.color]="colorValue"
+        />
+      </div>
+      <div class="form-outline col-md-1 col-6">
+        <input
+          #lineThicknessInput
+          type="number"
+          value="4"
+          min="0"
+          class="form-control"
+          (change)="onChangeLineThickness(lineThicknessInput)"
+        />
+      </div>
+      <div class="col-md-4">
         <input
           #imageInput
           class="form-control"
@@ -31,7 +55,7 @@
           placeholder="File name"
         />
       </div>
-      <div class="col-md-2">
+      <div class="col-md-1">
         <button #button (click)="onUpload()" class="btn btn-primary">
           Upload
         </button>
