@@ -1,0 +1,60 @@
+<div #main class="main">
+  <div style="text-align: center">
+    <canvas #canvas class="beforeImg"></canvas>
+  </div>
+
+  <div #bottom class="container fixed-bottom">
+    <div class="row">
+      <div class="col-md-5">
+        <input
+          #imageInput
+          class="form-control"
+          accept="image/*"
+          type="file"
+          (change)="onLoad(imageInput)"
+        />
+      </div>
+      <div class="col-md-3">
+        <input
+          class="form-control"
+          type="text"
+          (change)="onChangeUrl($event)"
+          placeholder="Destination URL"
+        />
+      </div>
+      <div class="col-md-2">
+        <input
+          #inputName
+          class="form-control"
+          type="text"
+          (change)="onChangeName($event)"
+          placeholder="File name"
+        />
+      </div>
+      <div class="col-md-2">
+        <button #button (click)="onUpload()" class="btn btn-primary">
+          Upload
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- <div class="fixed-right">
+    <div class="form-check">
+      <input
+        class="form-check-input custom-control-input red"
+        type="radio"
+        name="flexRadioDefault"
+      />
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input custom-control-input green"
+        type="radio"
+        name="flexRadioDefault"
+        checked
+      />
+    </div>
+  </div> -->
+</div>
+
+<!-- (window:resize)="onResize($event)" -->
